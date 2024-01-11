@@ -267,7 +267,28 @@ module overmind::marketplace {
         supply: u64, 
         category: u8
     ) {
-        
+        assert!(shop.shop_owner_cap == object::id(shop_owner_cap), ENotShopOwner);
+        assert!(price > 0, EInvalidPrice);
+        assert!(supply > 0, EInvalidSupply);
+
+        vector::push_back<Item>(&mut shop.items, Item {
+            id: shop.item_count,
+            title: string::utf8(title),
+            description: string::utf8(description),
+            price,
+            url: url::new_unsafe_from_bytes(url),
+            listed: true,
+            category,
+            total_supply: supply,
+            available: supply,
+        });
+
+        event::emit(ItemAdded {
+            shop_id: object::id(shop),
+            item: shop.item_count,
+        });
+
+        shop.item_count = shop.item_count + 1;
     }
 
     /*
