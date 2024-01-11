@@ -219,7 +219,29 @@ module overmind::marketplace {
         @param ctx - The transaction context.
 	*/
 	public fun create_shop(recipient: address, ctx: &mut TxContext) {
-        
+        let shop_owner_cap_id = object::new(ctx);
+        let shop = Shop {
+            id: object::new(ctx),
+            shop_owner_cap: object::uid_to_inner(&shop_owner_cap_id), 
+            balance: balance::zero(),
+            items: vector::empty<Item>(),
+            item_count: 0,
+        };
+
+        let shop_owner_cap = ShopOwnerCapability {
+            id: shop_owner_cap_id,
+            shop: object::id(&shop),
+        };
+
+        shop.shop_owner_cap = object::id(&shop_owner_cap);
+
+        event::emit(ShopCreated {
+            shop_id: object::id(&shop),
+            shop_owner_cap_id: object::id(&shop_owner_cap) 
+        });
+
+        transfer::transfer(shop_owner_cap, recipient);
+        transfer::share_object(shop);
 	}
 
     /*
