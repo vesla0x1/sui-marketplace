@@ -303,7 +303,16 @@ module overmind::marketplace {
         shop_owner_cap: &ShopOwnerCapability,
         item_id: u64
     ) {
-        
+        assert!(shop.shop_owner_cap == object::id(shop_owner_cap), ENotShopOwner);
+        assert!(shop.item_count > item_id, EInvalidItemId);
+
+        let item_ref = vector::borrow_mut(&mut shop.items, item_id);
+        item_ref.listed = false;
+
+        event::emit(ItemUnlisted {
+            shop_id: object::id(shop),
+            item_id,
+        });
     }
 
     /*
