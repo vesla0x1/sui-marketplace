@@ -328,7 +328,42 @@ module overmind::marketplace {
         payment_coin: &mut coin::Coin<SUI>,
         ctx: &mut TxContext
     ) {
+        assert!(shop.item_count > item_id, EInvalidItemId);
 
+        let item_ref = vector::borrow_mut(&mut shop.items, item_id);
+        assert!(item_ref.listed == true, EItemIsNotListed);
+        assert!(item_ref.available >= quantity, EInvalidQuantity);
+
+        let total_price = item_ref.price * quantity;
+        assert!(coin::value(payment_coin) >= total_price, EInsufficientPayment);
+
+        let coin_balance = coin::balance_mut(payment_coin);
+        let paid = balance::split(coin_balance, total_price);
+        balance::join(&mut shop.balance, paid);
+
+        item_ref.available = item_ref.available - quantity;
+
+        if (item_ref.available == 0) {
+            unlist_item_from_shop(shop, item_id);
+        };
+
+        let shop_id = object::id(shop);
+        let i = 0;
+        while (i < quantity)  {
+            transfer::transfer(PurchasedItem {
+                id: object::new(ctx),
+                shop_id,
+                item_id,
+            }, recipient);
+            i = i + 1;
+        };
+
+        event::emit(ItemPurchased {
+           shop_id,
+           item_id,
+           quantity,
+           buyer: recipient, 
+        });
     }
 
     /*
