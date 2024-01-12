@@ -382,7 +382,15 @@ module overmind::marketplace {
         recipient: address,
         ctx: &mut TxContext
     ) {
+        assert!(object::id(shop_owner_cap) == shop.shop_owner_cap, ENotShopOwner);
+        assert!(balance::value(&shop.balance) >= amount, EInvalidWithdrawalAmount);
+        transfer::public_transfer(coin::take(&mut shop.balance, amount, ctx), recipient);
         
+        event::emit(ShopWithdrawal {
+            shop_id: object::id(shop),
+            amount,
+            recipient,
+        });
     }
 
     //==============================================================================================
