@@ -306,13 +306,7 @@ module overmind::marketplace {
         assert!(shop.shop_owner_cap == object::id(shop_owner_cap), ENotShopOwner);
         assert!(shop.item_count > item_id, EInvalidItemId);
 
-        let item_ref = vector::borrow_mut(&mut shop.items, item_id);
-        item_ref.listed = false;
-
-        event::emit(ItemUnlisted {
-            shop_id: object::id(shop),
-            item_id,
-        });
+        unlist_item_from_shop(shop, item_id);
     }
 
     /*
@@ -359,6 +353,17 @@ module overmind::marketplace {
     //==============================================================================================
     // Helper functions - Add your helper functions here (if any)
     //==============================================================================================
+    fun unlist_item_from_shop(shop: &mut Shop, item_id: u64) {
+        {
+            let item_ref = vector::borrow_mut(&mut shop.items, item_id);
+            item_ref.listed = false;
+        };
+
+        event::emit(ItemUnlisted {
+            shop_id: object::id(shop),
+            item_id,
+        });
+    }
 
     //==============================================================================================
     // Validation functions - Add your validation functions here (if any)
