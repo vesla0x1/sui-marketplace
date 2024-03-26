@@ -219,7 +219,29 @@ module overmind::marketplace {
         @param ctx - The transaction context.
 	*/
 	public fun create_shop(recipient: address, ctx: &mut TxContext) {
-        
+        let shop_owner_cap_id = object::new(ctx);
+        let shop = Shop {
+            id: object::new(ctx),
+            shop_owner_cap: object::uid_to_inner(&shop_owner_cap_id), 
+            balance: balance::zero(),
+            items: vector::empty<Item>(),
+            item_count: 0,
+        };
+
+        let shop_owner_cap = ShopOwnerCapability {
+            id: shop_owner_cap_id,
+            shop: object::id(&shop),
+        };
+
+        shop.shop_owner_cap = object::id(&shop_owner_cap);
+
+        event::emit(ShopCreated {
+            shop_id: object::id(&shop),
+            shop_owner_cap_id: object::id(&shop_owner_cap) 
+        });
+
+        transfer::transfer(shop_owner_cap, recipient);
+        transfer::share_object(shop);
 	}
 
     /*
@@ -245,7 +267,28 @@ module overmind::marketplace {
         supply: u64, 
         category: u8
     ) {
-        
+        assert!(shop.shop_owner_cap == object::id(shop_owner_cap), ENotShopOwner);
+        assert!(price > 0, EInvalidPrice);
+        assert!(supply > 0, EInvalidSupply);
+
+        vector::push_back<Item>(&mut shop.items, Item {
+            id: shop.item_count,
+            title: string::utf8(title),
+            description: string::utf8(description),
+            price,
+            url: url::new_unsafe_from_bytes(url),
+            listed: true,
+            category,
+            total_supply: supply,
+            available: supply,
+        });
+
+        event::emit(ItemAdded {
+            shop_id: object::id(shop),
+            item: shop.item_count,
+        });
+
+        shop.item_count = shop.item_count + 1;
     }
 
     /*
@@ -260,7 +303,10 @@ module overmind::marketplace {
         shop_owner_cap: &ShopOwnerCapability,
         item_id: u64
     ) {
-        
+        assert!(shop.shop_owner_cap == object::id(shop_owner_cap), ENotShopOwner);
+        assert!(shop.item_count > item_id, EInvalidItemId);
+
+        unlist_item_from_shop(shop, item_id);
     }
 
     /*
@@ -282,7 +328,42 @@ module overmind::marketplace {
         payment_coin: &mut coin::Coin<SUI>,
         ctx: &mut TxContext
     ) {
+        assert!(shop.item_count > item_id, EInvalidItemId);
 
+        let item_ref = vector::borrow_mut(&mut shop.items, item_id);
+        assert!(item_ref.listed == true, EItemIsNotListed);
+        assert!(item_ref.available >= quantity, EInvalidQuantity);
+
+        let total_price = item_ref.price * quantity;
+        assert!(coin::value(payment_coin) >= total_price, EInsufficientPayment);
+
+        let coin_balance = coin::balance_mut(payment_coin);
+        let paid = balance::split(coin_balance, total_price);
+        balance::join(&mut shop.balance, paid);
+
+        item_ref.available = item_ref.available - quantity;
+
+        if (item_ref.available == 0) {
+            unlist_item_from_shop(shop, item_id);
+        };
+
+        let shop_id = object::id(shop);
+        let i = 0;
+        while (i < quantity)  {
+            transfer::transfer(PurchasedItem {
+                id: object::new(ctx),
+                shop_id,
+                item_id,
+            }, recipient);
+            i = i + 1;
+        };
+
+        event::emit(ItemPurchased {
+           shop_id,
+           item_id,
+           quantity,
+           buyer: recipient, 
+        });
     }
 
     /*
@@ -301,12 +382,31 @@ module overmind::marketplace {
         recipient: address,
         ctx: &mut TxContext
     ) {
+        assert!(object::id(shop_owner_cap) == shop.shop_owner_cap, ENotShopOwner);
+        assert!(balance::value(&shop.balance) >= amount, EInvalidWithdrawalAmount);
+        transfer::public_transfer(coin::take(&mut shop.balance, amount, ctx), recipient);
         
+        event::emit(ShopWithdrawal {
+            shop_id: object::id(shop),
+            amount,
+            recipient,
+        });
     }
 
     //==============================================================================================
     // Helper functions - Add your helper functions here (if any)
     //==============================================================================================
+    fun unlist_item_from_shop(shop: &mut Shop, item_id: u64) {
+        {
+            let item_ref = vector::borrow_mut(&mut shop.items, item_id);
+            item_ref.listed = false;
+        };
+
+        event::emit(ItemUnlisted {
+            shop_id: object::id(shop),
+            item_id,
+        });
+    }
 
     //==============================================================================================
     // Validation functions - Add your validation functions here (if any)
